@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bubble Sort Visualizer</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1e1e1e;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        h1 { margin-bottom: 10px; }
+        #container {
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            height: 400px;
+            width: 90%;
+            background-color: #2d2d2d;
+            border: 1px solid #444;
+            padding: 10px;
+            gap: 2px;
+        }
+        .bar {
+            background-color: #4CAF50;
+            width: 100%;
+            transition: height 0.1s ease;
+            border-top-left-radius: 3px;
+            border-top-right-radius: 3px;
+            
+            /* Dùng relative để định vị số absolute theo thanh bar */
+            position: relative;
+            
+            /* Không dùng flex nữa */
+            /* display: flex; align-items: flex-end; justify-content: center; */
+        }
+        .bar.active { background-color: #FF5722; }
+        .bar.sorted { background-color: #2196F3; }
+        
+        /* Xử lý hiển thị số nằm trên đầu thanh */
+        .bar span {
+            position: absolute;
+            top: -20px; /* Đẩy lên trên đầu thanh khoảng 20px */
+            left: 50%;
+            transform: translateX(-50%); /* Căn giữa theo chiều ngang */
+            
+            color: #fff;
+            font-size: 12px;
+            font-weight: bold;
+            z-index: 10;
+            text-shadow: none; /* Không cần bóng nếu nền đen đủ tối */
+        }
+        
+        #status { margin-top: 20px; font-size: 1.2em; color: #aaa; }
+        button {
+            padding: 10px 20px;
+            font-size: 1em;
+            cursor: pointer;
+            background-color: #007ACC;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        button:hover { background-color: #005FA3; }
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        select {
+            padding: 10px;
+            font-size: 1em;
+            border-radius: 5px;
+            border: 1px solid #555;
+            background-color: #333;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <h1>Mô phỏng Thuật toán Sắp xếp</h1>
+    
+    <div class="controls">
+        <select id="algoSelect">
+            <option value="bubble">Bubble Sort</option>
+            <option value="quick">Quick Sort</option>
+            <option value="heap">Heap Sort</option>
+            <option value="merge">Merge Sort</option>
+            <option value="insertion">Insertion Sort</option>
+            <option value="selection">Selection Sort</option>
+        </select>
+        <div style="display: flex; align-items: center; gap: 5px;">
+            <input type="checkbox" id="soundToggle" checked>
+            <label for="soundToggle" style="cursor: pointer;">🔊 Bật âm thanh</label>
+        </div>
+        <div style="display: flex; align-items: center; gap: 5px;">
+            <label for="speedRange">Tốc độ:</label>
+            <input type="range" id="speedRange" min="10" max="500" value="100" step="10">
+            <span id="speedVal">100ms</span>
+        </div>
+        <button onclick="startSort()">Bắt đầu Sắp xếp</button>
+    </div>
+
+    <div id="container"></div>
+    <div id="status">Chọn thuật toán và bấm Bắt đầu</div>
+
+    <script>
+        const container = document.getElementById('container');
+        const statusDiv = document.getElementById('status');
+        const algoSelect = document.getElementById('algoSelect');
+        const soundToggle = document.getElementById('soundToggle');
+        const speedRange = document.getElementById('speedRange');
+        const speedVal = document.getElementById('speedVal');
+        let evtSource = null;
+        
+        // Cập nhật hiển thị giá trị tốc độ
+        speedRange.oninput = function() {
+            speedVal.innerText = this.value + "ms";
+        }
+        
+        // Web Audio API context
+        let audioCtx = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        // Tần số các nốt nhạc (C4 -> B5)
+        const NOTES = {
+            'C': 261.63, 'D': 293.66, 'E': 329.63, 'F': 349.23, 'G': 392.00, 'A': 440.00, 'B': 493.88,
+            'C5': 523.25, 'D5': 587.33, 'E5': 659.25, 'F5': 698.46, 'G5': 783.99, 'A5': 880.00, 'B5': 987.77
+        };
+        const NOTE_KEYS = Object.values(NOTES);
+
+        function playNote(val) {
+            if (!audioCtx || !soundToggle.checked) return;
+            
+            // Map giá trị (1-100) sang nốt nhạc
+            // Có 14 nốt trong danh sách, map val % 14
+            const noteIndex = Math.floor((val / 100) * NOTE_KEYS.length) % NOTE_KEYS.length;
+            const freq = NOTE_KEYS[noteIndex];
+
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            
+            // Mô phỏng âm sắc Piano (kết hợp sine + triangle để tạo độ dày)
+            // Tuy nhiên Web Audio API đơn giản thì triangle là gần nhất với tiếng đàn organ/piano điện tử
+            osc.type = 'triangle'; 
+            osc.frequency.value = freq;
+            
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            
+            const now = audioCtx.currentTime;
+            
+            // Envelope mô phỏng tiếng gõ Piano (Attack nhanh, Decay tự nhiên)
+            gain.gain.setValueAtTime(0, now);
+            gain.gain.linearRampToValueAtTime(0.3, now + 0.01); // Attack cực nhanh
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3); // Decay dài hơn (ngân)
+            
+            osc.start(now);
+            osc.stop(now + 0.3);
+        }
+
+        function startSort() {
+            // Khởi tạo Audio Context (cần user gesture)
+            initAudio();
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
+            if (evtSource) {
+                evtSource.close();
+            }
+
+            const algo = algoSelect.value;
+            const delay = speedRange.value;
+            statusDiv.innerText = `Đang kết nối để chạy ${algo}...`;
+            
+            // Kết nối SSE với tham số algo và delay
+            evtSource = new EventSource(`/events?algo=${algo}&delay=${delay}`);
+
+            evtSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                
+                // Nếu là thông báo trạng thái
+                if (data.status) {
+                    statusDiv.innerText = data.status;
+                    if (data.finished) {
+                        evtSource.close();
+                        statusDiv.innerText = `Hoàn tất ${algo}! 🎉`;
+                    }
+                }
+
+                // Vẽ mảng (nếu có dữ liệu mảng)
+                if (data.arr) {
+                    renderBars(data.arr, data.compareIdx);
+                    
+                    // Phát âm thanh cho các phần tử đang tương tác
+                    if (data.compareIdx && data.compareIdx.length > 0) {
+                        data.compareIdx.forEach(idx => {
+                            const val = data.arr[idx];
+                            if (val !== undefined) {
+                                // Truyền trực tiếp giá trị val để map sang nốt nhạc
+                                playNote(val);
+                            }
+                        });
+                    }
+                }
+            };
+
+            evtSource.onerror = function(err) {
+                console.error("EventSource failed:", err);
+                evtSource.close();
+            };
+        }
+
+        function renderBars(arr, compareIdx) {
+            container.innerHTML = ''; // Xóa cũ
+            const maxVal = Math.max(...arr);
+            
+            arr.forEach((val, idx) => {
+                const bar = document.createElement('div');
+                bar.className = 'bar';
+                // Chiều cao %
+                const height = (val / maxVal) * 100;
+                bar.style.height = `${height}%`;
+                
+                // Hiển thị giá trị số
+                const label = document.createElement('span');
+                label.innerText = val;
+                bar.appendChild(label);
+                
+                // Highlight các thanh đang so sánh
+                if (compareIdx && (idx === compareIdx[0] || idx === compareIdx[1])) {
+                    bar.classList.add('active');
+                }
+                
+                container.appendChild(bar);
+            });
+        }
+    </script>
+</body>
+</html>
